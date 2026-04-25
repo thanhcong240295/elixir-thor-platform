@@ -1,0 +1,129 @@
+name: Elixir Thor Platform
+version: '3.8'
+services:
+  sonarqube:
+    image: sonarqube:community
+    container_name: thor-sonarqube
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+
+  postgres:
+    image: postgres:17
+    container_name: thor-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-ai_api_dev}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - thor_postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: >
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c max_wal_senders=10
+      -c wal_keep_size=1GB
+
+  postgres-replica:
+    image: postgres:17
+    container_name: thor-postgres-replica
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-ai_api_dev}
+    ports:
+      - "${DB_PORT_READ:-5433}:5432"
+    volumes:
+      - thor_postgres_replica_data:/var/lib/postgresql/data
+      - ./scripts/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    depends_on:
+      - postgres
+    command: >
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c wal_level=replica
+      -c primary_conninfo='host=postgres port=5432 user=${DB_USER:-postgres} password=${DB_PASSWORD:-postgres}'
+
+  redis:
+    image: redis:7
+    container_name: thor-redis
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - thor_redis_data:/data
+    command: redis-server --appendonly yes
+
+  redis-replica:
+    image: redis:7
+    container_name: thor-redis-replica
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${REDIS_PORT_READ:-6380}:6379"
+    volumes:
+      - thor_redis_replica_data:/data
+    depends_on:
+      - redis
+    command: redis-server --port 6379 --slaveof redis 6379 --appendonly yes
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: thor-pgadmin
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - thor_pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+
+  redis-ui:
+    image: redis/redisinsight:latest
+    container_name: thor-redis-ui
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${REDIS_UI_PORT:-5540}:5540"
+    volumes:
+      - thor_redis_ui_data:/data
+    depends_on:
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: thor-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./scripts/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  thor_postgres_data:
+  thor_postgres_replica_data:
+  thor_redis_data:
+  thor_redis_replica_data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
+  thor_pgadmin_data:
+  thor_redis_ui_data:
