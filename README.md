@@ -81,7 +81,7 @@ Or run directly from `apps/ai_api`:
 
 ~~~bash
 mix format
-mix compile --warnings-as-errors
+mix compile --wanings-as-errors
 MIX_ENV=test mix test
 mix precommit
 ~~~
@@ -258,7 +258,7 @@ bash scripts/dev-all.sh build
 # Clean backend artifacts and frontend .next outputs
 bash scripts/dev-all.sh clean
 
-# Check format, warnings, and unused dependencies
+# Check format, wanings, and unused dependencies
 bash scripts/dev-all.sh check
 
 # Format Elixir code
